@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Handwritten Digit Recognition</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #f0f4f8;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      padding: 32px 36px;
+      max-width: 520px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 0.875rem;
+      color: #64748b;
+      margin-bottom: 20px;
+    }
+
+    /* Canvas area */
+    .canvas-wrapper {
+      position: relative;
+      display: inline-block;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    #drawCanvas {
+      display: block;
+      background: white;
+    }
+
+    /* Buttons */
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button {
+      padding: 10px 22px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    button:hover { opacity: 0.85; }
+
+    #btnRecognize {
+      background: #2563eb;
+      color: white;
+      flex: 1;
+    }
+
+    #btnClear {
+      background: #e2e8f0;
+      color: #374151;
+    }
+
+    /* Result */
+    .result-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .digit-box {
+      width: 80px;
+      height: 80px;
+      border-radius: 12px;
+      background: #eff6ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      font-weight: 800;
+      color: #2563eb;
+      flex-shrink: 0;
+    }
+
+    .confidence {
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    /* Probability bars */
+    .bars {
+      margin-top: 20px;
+    }
+
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+
+    .bar-label {
+      width: 16px;
+      font-size: 0.8rem;
+      color: #374151;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .bar-track {
+      flex: 1;
+      height: 12px;
+      background: #e2e8f0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      background: #93c5fd;
+      transition: width 0.3s ease;
+    }
+
+    .bar-fill.highlight { background: #2563eb; }
+
+    .bar-pct {
+      width: 40px;
+      font-size: 0.75rem;
+      color: #64748b;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .status-msg {
+      font-size: 0.85rem;
+      color: #ef4444;
+      margin-top: 8px;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>손글씨 숫자 인식</h1>
+    <p class="subtitle">캔버스에 숫자(0–9)를 그린 후 인식 버튼을 누르세요.</p>
+
+    <div class="canvas-wrapper">
+      <canvas id="drawCanvas" width="280" height="280"></canvas>
+    </div>
+
+    <div class="btn-row">
+      <button id="btnRecognize">인식하기</button>
+      <button id="btnClear">지우기</button>
+    </div>
+
+    <p class="status-msg" id="statusMsg"></p>
+
+    <div class="result-row">
+      <div class="digit-box" id="digitBox">—</div>
+      <div>
+        <div style="font-size:1rem;font-weight:600;color:#1e293b;">예측 숫자</div>
+        <div class="confidence" id="confText"></div>
+      </div>
+    </div>
+
+    <div class="bars" id="barsContainer">
+      <!-- Filled by JS -->
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('drawCanvas');
+    const ctx = canvas.getContext('2d');
+    const BRUSH_RADIUS = 12;
+
+    // Fill white background
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    let drawing = false;
+    let lastX = null, lastY = null;
+
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const src = e.touches ? e.touches[0] : e;
+      return [src.clientX - rect.left, src.clientY - rect.top];
+    }
+
+    function drawAt(x, y) {
+      ctx.beginPath();
+      if (lastX !== null) {
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = BRUSH_RADIUS * 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(x, y, BRUSH_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = 'black';
+      ctx.fill();
+      lastX = x; lastY = y;
+    }
+
+    canvas.addEventListener('mousedown',  e => { drawing = true;  const [x,y] = getPos(e); drawAt(x,y); });
+    canvas.addEventListener('mousemove',  e => { if (drawing) { const [x,y] = getPos(e); drawAt(x,y); } });
+    canvas.addEventListener('mouseup',    () => { drawing = false; lastX = null; lastY = null; });
+    canvas.addEventListener('mouseleave', () => { drawing = false; lastX = null; lastY = null; });
+
+    canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const [x,y] = getPos(e); drawAt(x,y); }, { passive: false });
+    canvas.addEventListener('touchmove',  e => { e.preventDefault(); if (drawing) { const [x,y] = getPos(e); drawAt(x,y); } }, { passive: false });
+    canvas.addEventListener('touchend',   () => { drawing = false; lastX = null; lastY = null; });
+
+    // Build probability bar chart (once)
+    const barsContainer = document.getElementById('barsContainer');
+    const barFills = [];
+    const barPcts  = [];
+    for (let d = 0; d < 10; d++) {
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      row.innerHTML = `
+        <span class="bar-label">${d}</span>
+        <div class="bar-track"><div class="bar-fill" id="fill${d}" style="width:0%"></div></div>
+        <span class="bar-pct" id="pct${d}">0%</span>`;
+      barsContainer.appendChild(row);
+      barFills.push(document.getElementById(`fill${d}`));
+      barPcts.push(document.getElementById(`pct${d}`));
+    }
+
+    function updateBars(probs, predicted) {
+      probs.forEach((p, d) => {
+        barFills[d].style.width = p + '%';
+        barFills[d].className = 'bar-fill' + (d === predicted ? ' highlight' : '');
+        barPcts[d].textContent = p.toFixed(1) + '%';
+      });
+    }
+
+    document.getElementById('btnRecognize').addEventListener('click', async () => {
+      const statusMsg = document.getElementById('statusMsg');
+      statusMsg.textContent = '';
+      const dataURL = canvas.toDataURL('image/png');
+
+      try {
+        const res = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: dataURL }),
+        });
+        const data = await res.json();
+        if (data.error) { statusMsg.textContent = data.error; return; }
+
+        document.getElementById('digitBox').textContent = data.predicted;
+        document.getElementById('confText').textContent = `신뢰도: ${data.confidence}%`;
+        updateBars(data.probabilities, data.predicted);
+      } catch (err) {
+        statusMsg.textContent = '서버 연결 실패: ' + err.message;
+      }
+    });
+
+    document.getElementById('btnClear').addEventListener('click', () => {
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      lastX = null; lastY = null;
+      document.getElementById('digitBox').textContent = '—';
+      document.getElementById('confText').textContent = '';
+      document.getElementById('statusMsg').textContent = '';
+      barFills.forEach((f, d) => { f.style.width = '0%'; f.className = 'bar-fill'; barPcts[d].textContent = '0%'; });
+    });
+  </script>
+</body>
+</html>
