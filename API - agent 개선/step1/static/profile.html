@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>프로필 설정</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f4f8; min-height: 100vh; padding: 80px 16px 40px; }
+  .page { max-width: 580px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; margin-bottom: 20px; }
+
+  .card { background: #fff; border-radius: 18px; box-shadow: 0 2px 14px rgba(0,0,0,0.07); padding: 28px; margin-bottom: 20px; }
+  .card-title { font-size: 1rem; font-weight: 700; color: #1a1a2e; margin-bottom: 18px; }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 0.8rem; font-weight: 600; color: #6b7280; margin-bottom: 6px; }
+  .field input, .field select {
+    width: 100%; padding: 10px 14px; border: 1.5px solid #d1d9f0; border-radius: 10px;
+    font-size: 0.92rem; outline: none; transition: border-color 0.2s; background: #fff; color: #1a1a2e;
+  }
+  .field input:focus, .field select:focus { border-color: #4f7df3; }
+  .field input[readonly] { background: #f8faff; color: #9ca3af; cursor: default; }
+
+  /* 태그 입력 */
+  .tag-input-wrap {
+    border: 1.5px solid #d1d9f0; border-radius: 10px; padding: 8px 10px;
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center; cursor: text;
+    transition: border-color 0.2s;
+  }
+  .tag-input-wrap:focus-within { border-color: #4f7df3; }
+  .tag-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #eef3ff; color: #2d4fa3; border-radius: 16px;
+    padding: 4px 10px; font-size: 0.82rem; font-weight: 500;
+  }
+  .tag-chip button { background: none; border: none; color: #7a99e3; cursor: pointer; font-size: 0.9rem; padding: 0; }
+  .tag-chip button:hover { color: #e63946; }
+  .tag-text-input {
+    border: none; outline: none; font-size: 0.88rem; min-width: 100px; flex: 1;
+    padding: 2px 4px; background: transparent; color: #1a1a2e;
+  }
+
+  /* 선호 요리 체크박스 */
+  .cuisine-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .cuisine-chip {
+    padding: 6px 14px; border-radius: 16px; font-size: 0.85rem; font-weight: 500;
+    cursor: pointer; user-select: none;
+    background: #f3f4f6; color: #374151; border: 1.5px solid #e5e9f5;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .cuisine-chip.selected { background: #eef3ff; color: #2d4fa3; border-color: #c3d0f8; }
+
+  /* 저장 버튼 */
+  .save-btn {
+    display: block; width: 100%; padding: 14px; background: #4f7df3; color: #fff;
+    border: none; border-radius: 12px; font-size: 1rem; font-weight: 700; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .save-btn:hover { background: #3a68e0; }
+  .save-btn:disabled { background: #a0b4e8; cursor: not-allowed; }
+
+  /* 성공 메시지 */
+  .success-msg {
+    display: none; margin-top: 12px; padding: 11px 14px; background: #d1fae5;
+    border: 1px solid #6ee7b7; border-radius: 10px; color: #065f46; font-size: 0.88rem;
+  }
+  .success-msg.show { display: block; }
+
+  /* 위험 영역 */
+  .danger-card { background: #fff; border-radius: 18px; padding: 28px; margin-bottom: 20px; border: 1.5px solid #fca5a5; }
+  .danger-title { font-size: 1rem; font-weight: 700; color: #e63946; margin-bottom: 8px; }
+  .danger-desc { font-size: 0.85rem; color: #6b7280; margin-bottom: 16px; line-height: 1.5; }
+  .danger-btn {
+    padding: 10px 20px; background: #fff; color: #e63946; border: 1.5px solid #fca5a5;
+    border-radius: 10px; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+  }
+  .danger-btn:hover { background: #fff0f0; }
+
+  .loading { text-align: center; padding: 40px; color: #4f7df3; font-size: 0.95rem; }
+  .spinner { width: 26px; height: 26px; border: 3px solid #c3d0f8; border-top-color: #4f7df3; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 10px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>⚙️ 프로필 설정</h1>
+  <div id="content">
+    <div class="loading"><div class="spinner"></div>불러오는 중…</div>
+  </div>
+</div>
+
+<script src="/header.js"></script>
+<script>
+  const CUISINES = ['한식','양식','중식','일식','분식','채식','동남아식'];
+  let profileData = null;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!Auth.isLoggedIn()) {
+      openLoginModal(() => loadProfile());
+      document.getElementById('content').innerHTML =
+        '<div class="loading" style="color:#9ca3af;">로그인 후 이용할 수 있습니다.</div>';
+    } else {
+      loadProfile();
+    }
+  });
+
+  async function loadProfile() {
+    try {
+      const resp = await Auth.authFetch('/api/profile');
+      if (resp.status === 401) { Auth.clearSession(); openLoginModal(() => loadProfile()); return; }
+      profileData = await resp.json();
+      renderForm();
+    } catch {
+      document.getElementById('content').innerHTML =
+        '<div class="loading" style="color:#e63946;">불러오기에 실패했습니다. 새로고침 해주세요.</div>';
+    }
+  }
+
+  function renderForm() {
+    const d = profileData;
+    document.getElementById('content').innerHTML = `
+      <!-- 기본 정보 -->
+      <div class="card">
+        <div class="card-title">👤 기본 정보</div>
+        <div class="field">
+          <label>이메일</label>
+          <input type="email" id="f-email" readonly />
+        </div>
+        <div class="field">
+          <label>닉네임</label>
+          <input type="text" id="f-nickname" placeholder="닉네임" />
+        </div>
+        <div class="field">
+          <label>기본 인원수</label>
+          <select id="f-servings">
+            ${[1,2,4].map(n=>`<option value="${n}" ${d.default_servings===n?'selected':''}>${n}인</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <!-- 식재료 설정 -->
+      <div class="card">
+        <div class="card-title">🚫 알레르기 재료</div>
+        <div class="field">
+          <label>추가하면 레시피에서 반드시 제외됩니다</label>
+          <div class="tag-input-wrap" id="allergy-wrap">
+            <input type="text" class="tag-text-input" id="allergy-input" placeholder="재료 입력 후 Enter…" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">😕 기피 재료</div>
+        <div class="field">
+          <label>가능하면 제외하는 방향으로 레시피를 생성합니다</label>
+          <div class="tag-input-wrap" id="dislike-wrap">
+            <input type="text" class="tag-text-input" id="dislike-input" placeholder="재료 입력 후 Enter…" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 선호 요리 -->
+      <div class="card">
+        <div class="card-title">❤️ 선호 요리 종류</div>
+        <div class="cuisine-grid" id="cuisine-grid"></div>
+      </div>
+
+      <button class="save-btn" id="save-btn">프로필 저장</button>
+      <div class="success-msg" id="success-msg">✓ 프로필이 저장되었습니다.</div>
+
+      <!-- 계정 삭제 -->
+      <div class="danger-card">
+        <div class="danger-title">⚠️ 계정 삭제</div>
+        <p class="danger-desc">계정을 삭제하면 저장된 모든 레시피와 프로필 정보가 영구적으로 삭제됩니다.</p>
+        <button class="danger-btn" id="delete-btn">계정 삭제</button>
+      </div>
+    `;
+
+    // 이메일/닉네임은 setAttribute로 설정해야 특수문자(따옴표 등) 오작동을 막을 수 있음
+    document.getElementById('f-email').setAttribute('value', d.email || '');
+    document.getElementById('f-nickname').setAttribute('value', d.nickname || '');
+
+    // 태그 초기화
+    initTagInput('allergy-wrap',  'allergy-input',  [...d.allergies]);
+    initTagInput('dislike-wrap',  'dislike-input',  [...d.disliked_ingredients]);
+
+    // 요리 종류 초기화
+    const grid = document.getElementById('cuisine-grid');
+    CUISINES.forEach(c => {
+      const chip = document.createElement('div');
+      chip.className = 'cuisine-chip' + (d.preferred_cuisine.includes(c) ? ' selected' : '');
+      chip.textContent = c;
+      chip.dataset.val = c;
+      chip.addEventListener('click', () => chip.classList.toggle('selected'));
+      grid.appendChild(chip);
+    });
+
+    // 저장
+    document.getElementById('save-btn').addEventListener('click', saveProfile);
+
+    // 계정 삭제
+    document.getElementById('delete-btn').addEventListener('click', deleteAccount);
+  }
+
+  // ── 태그 인풋 ────────────────────────────────────────────────────────────
+  function initTagInput(wrapId, inputId, initial) {
+    const wrap  = document.getElementById(wrapId);
+    const input = document.getElementById(inputId);
+    let tags = [...initial];
+
+    function renderTags() {
+      wrap.querySelectorAll('.tag-chip').forEach(el => el.remove());
+      tags.forEach(t => {
+        const chip = document.createElement('span');
+        chip.className = 'tag-chip';
+        chip.innerHTML = `${t}<button type="button">✕</button>`;
+        chip.querySelector('button').addEventListener('click', () => {
+          tags = tags.filter(x => x !== t);
+          renderTags();
+        });
+        wrap.insertBefore(chip, input);
+      });
+    }
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        const val = input.value.trim().replace(/,/g, '');
+        if (val && !tags.includes(val)) { tags.push(val); renderTags(); }
+        input.value = '';
+      }
+      if (e.key === 'Backspace' && !input.value && tags.length) {
+        tags.pop(); renderTags();
+      }
+    });
+    wrap.addEventListener('click', () => input.focus());
+
+    // 외부에서 값 읽기
+    wrap._getTags = () => [...tags];
+    renderTags();
+  }
+
+  // ── 저장 ─────────────────────────────────────────────────────────────────
+  async function saveProfile() {
+    const btn = document.getElementById('save-btn');
+    const msg = document.getElementById('success-msg');
+    btn.disabled = true; msg.classList.remove('show');
+
+    const body = {
+      nickname:             document.getElementById('f-nickname').value.trim(),
+      allergies:            document.getElementById('allergy-wrap')._getTags(),
+      disliked_ingredients: document.getElementById('dislike-wrap')._getTags(),
+      preferred_cuisine:    [...document.querySelectorAll('.cuisine-chip.selected')].map(el => el.dataset.val),
+      default_servings:     parseInt(document.getElementById('f-servings').value),
+    };
+
+    if (!body.nickname) { alert('닉네임을 입력해주세요.'); btn.disabled = false; return; }
+
+    try {
+      const resp = await Auth.authFetch('/api/profile', { method: 'PUT', body: JSON.stringify(body) });
+      const data = await resp.json();
+      if (resp.ok) {
+        // 닉네임 변경 시 헤더 갱신
+        if (body.nickname !== Auth.getNick()) {
+          Auth.setSession(Auth.getToken(), body.nickname);
+          if (window._reloadHeader) _reloadHeader();
+        }
+        msg.classList.add('show');
+        setTimeout(() => msg.classList.remove('show'), 3000);
+      } else {
+        alert(data.detail || '저장에 실패했습니다.');
+      }
+    } catch { alert('네트워크 오류가 발생했습니다.'); }
+    finally { btn.disabled = false; }
+  }
+
+  // ── 계정 삭제 ─────────────────────────────────────────────────────────────
+  async function deleteAccount() {
+    if (!confirm('정말 계정을 삭제하시겠습니까?\n저장된 모든 레시피가 함께 삭제됩니다.')) return;
+    try {
+      const resp = await Auth.authFetch('/api/profile', { method: 'DELETE' });
+      if (resp.ok) {
+        Auth.clearSession();
+        alert('계정이 삭제되었습니다.');
+        window.location.href = '/';
+      }
+    } catch { alert('오류가 발생했습니다.'); }
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My 레시피</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f4f8; min-height: 100vh; padding: 80px 16px 40px; }
+  .page { max-width: 720px; margin: 0 auto; }
+
+  h1 { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; margin-bottom: 20px; }
+
+  /* 검색 + 정렬 */
+  .toolbar { display: flex; gap: 10px; margin-bottom: 20px; }
+  .toolbar input {
+    flex: 1; padding: 10px 14px; border: 1.5px solid #d1d9f0; border-radius: 10px;
+    font-size: 0.9rem; outline: none;
+  }
+  .toolbar input:focus { border-color: #4f7df3; }
+  .toolbar select {
+    padding: 10px 12px; border: 1.5px solid #d1d9f0; border-radius: 10px;
+    font-size: 0.88rem; background: #fff; outline: none; cursor: pointer; color: #374151;
+  }
+
+  /* 빈 상태 */
+  .empty {
+    text-align: center; padding: 60px 20px; color: #9ca3af;
+    background: #fff; border-radius: 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .empty .icon { font-size: 3rem; margin-bottom: 12px; }
+  .empty p { font-size: 0.95rem; margin-bottom: 16px; }
+  .empty a {
+    display: inline-block; padding: 10px 24px; background: #4f7df3; color: #fff;
+    border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 0.9rem;
+  }
+
+  /* 레시피 카드 */
+  .recipe-list { display: flex; flex-direction: column; gap: 16px; }
+  .recipe-card {
+    background: #fff; border-radius: 16px; padding: 22px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06); cursor: pointer;
+    border: 2px solid transparent; transition: box-shadow 0.2s, border-color 0.15s, transform 0.15s;
+  }
+  .recipe-card:hover { box-shadow: 0 6px 24px rgba(79,125,243,0.13); border-color: #c3d0f8; transform: translateY(-1px); }
+
+  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .card-title { font-size: 1.05rem; font-weight: 700; color: #1a1a2e; }
+  .del-btn {
+    background: none; border: none; color: #d1d9f0; font-size: 1rem;
+    cursor: pointer; padding: 2px 4px; border-radius: 6px; flex-shrink: 0;
+  }
+  .del-btn:hover { color: #e63946; background: #fff0f0; }
+
+  .card-desc { font-size: 0.85rem; color: #6b7280; margin-bottom: 10px; line-height: 1.5; }
+
+  .meta-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .meta-badge {
+    background: #f3f4f6; color: #374151; border-radius: 8px;
+    padding: 3px 9px; font-size: 0.78rem; font-weight: 500;
+  }
+
+  /* 별점 */
+  .stars { display: flex; gap: 2px; margin-bottom: 8px; }
+  .star { font-size: 1.1rem; cursor: pointer; color: #d1d9f0; transition: color 0.1s; user-select: none; }
+  .star.on { color: #f59e0b; }
+  .star:hover { color: #f59e0b; }
+
+  /* 태그 */
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  .tag { background: #eef3ff; color: #2d4fa3; border-radius: 14px; padding: 3px 10px; font-size: 0.75rem; font-weight: 500; }
+
+  /* 메모 */
+  .memo-preview { font-size: 0.82rem; color: #6b7280; font-style: italic; }
+  .saved-date { font-size: 0.75rem; color: #9ca3af; margin-top: 6px; }
+
+  /* 모달 */
+  #modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    z-index: 100; align-items: flex-start; justify-content: center;
+    padding: 40px 16px; overflow-y: auto;
+  }
+  #modal-overlay.open { display: flex; }
+  #modal {
+    background: #fff; border-radius: 20px; width: 100%; max-width: 580px;
+    padding: 30px; position: relative; box-shadow: 0 8px 40px rgba(0,0,0,0.14);
+  }
+  #modal-close {
+    position: absolute; top: 14px; right: 18px; background: none;
+    border: none; font-size: 1.3rem; cursor: pointer; color: #9ca3af;
+  }
+  #modal-close:hover { color: #374151; }
+  #modal h2 { font-size: 1.2rem; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+  #modal .m-desc { color: #6b7280; font-size: 0.88rem; margin-bottom: 14px; line-height: 1.5; }
+  .m-section { font-size: 0.8rem; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: .05em; margin: 16px 0 8px; }
+  .m-ing-list { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+  .ing-chip { border-radius: 12px; padding: 3px 9px; font-size: 0.78rem; font-weight: 500; }
+  .ing-chip.have { background: #d1fae5; color: #065f46; }
+  .ing-chip.need { background: #f3f4f6; color: #9ca3af; }
+
+  /* 단계 */
+  .step-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+  .step-item { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; user-select: none; }
+  .step-num {
+    width: 24px; height: 24px; border: 2px solid #c3d0f8; border-radius: 50%;
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 0.78rem; font-weight: 700; color: #4f7df3; transition: background 0.15s;
+  }
+  .step-item.done .step-num { background: #4f7df3; border-color: #4f7df3; color: #fff; }
+  .step-text { font-size: 0.9rem; color: #374151; line-height: 1.6; }
+  .step-item.done .step-text { color: #9ca3af; text-decoration: line-through; }
+
+  /* 별점 수정 (모달) */
+  .rating-edit { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .rating-edit .stars .star { font-size: 1.4rem; }
+  .rating-label { font-size: 0.82rem; color: #6b7280; }
+
+  /* 메모 수정 */
+  #modal-memo {
+    width: 100%; padding: 10px 12px; border: 1.5px solid #d1d9f0; border-radius: 10px;
+    font-size: 0.88rem; resize: vertical; min-height: 80px; outline: none;
+    font-family: inherit; transition: border-color 0.2s;
+  }
+  #modal-memo:focus { border-color: #4f7df3; }
+  .memo-char { font-size: 0.75rem; color: #9ca3af; text-align: right; margin-top: 4px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .btn-save-memo {
+    flex: 1; padding: 12px; background: #4f7df3; color: #fff; border: none;
+    border-radius: 10px; font-size: 0.92rem; font-weight: 700; cursor: pointer;
+  }
+  .btn-save-memo:hover { background: #3a68e0; }
+  .btn-del-recipe {
+    padding: 12px 18px; background: #fff; color: #e63946;
+    border: 1.5px solid #fca5a5; border-radius: 10px; font-size: 0.88rem;
+    font-weight: 600; cursor: pointer;
+  }
+  .btn-del-recipe:hover { background: #fff0f0; }
+
+  /* 로딩 */
+  .loading { text-align: center; padding: 40px; color: #4f7df3; font-size: 0.95rem; }
+  .spinner {
+    width: 28px; height: 28px; border: 3px solid #c3d0f8; border-top-color: #4f7df3;
+    border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>📚 My 레시피</h1>
+
+  <div class="toolbar">
+    <input type="text" id="search-input" placeholder="레시피 이름 또는 태그로 검색…" />
+    <select id="sort-select">
+      <option value="recent">최근 저장순</option>
+      <option value="rating">별점 높은 순</option>
+    </select>
+  </div>
+
+  <div id="list-area">
+    <div class="loading"><div class="spinner"></div>불러오는 중…</div>
+  </div>
+</div>
+
+<!-- 상세 모달 -->
+<div id="modal-overlay">
+  <div id="modal">
+    <button id="modal-close">✕</button>
+    <h2 id="m-title"></h2>
+    <p class="m-desc" id="m-desc"></p>
+    <div class="meta-row" id="m-meta"></div>
+
+    <div class="m-section">재료</div>
+    <div class="m-ing-list" id="m-ings"></div>
+
+    <div class="m-section">조리 순서</div>
+    <div class="step-list" id="m-steps"></div>
+
+    <div class="m-section">별점</div>
+    <div class="rating-edit">
+      <div class="stars" id="m-stars"></div>
+      <span class="rating-label" id="m-rating-label">미평가</span>
+    </div>
+
+    <div class="m-section">메모 <span style="font-weight:400;text-transform:none;">(최대 500자)</span></div>
+    <textarea id="modal-memo" placeholder="이 레시피에 대한 메모를 남겨보세요…"></textarea>
+    <div class="memo-char"><span id="memo-count">0</span>/500</div>
+
+    <div class="modal-actions">
+      <button class="btn-save-memo" id="btn-save-memo">변경사항 저장</button>
+      <button class="btn-del-recipe" id="btn-del-recipe">삭제</button>
+    </div>
+  </div>
+</div>
+
+<script src="/header.js"></script>
+<script>
+  // ── HTML 이스케이프 유틸 (XSS 방지 + AI 출력 깨짐 방지) ──────────────────
+  function esc(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  let allRecipes = [];
+  let totalCount = 0;
+  const PAGE_SIZE = 20;
+  let currentOffset = 0;
+  let currentSaved = null;
+
+  // ── 보호된 라우트 ──────────────────────────────────────────────────────────
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!Auth.isLoggedIn()) {
+      openLoginModal(() => loadRecipes());
+      document.getElementById('list-area').innerHTML =
+        '<div class="empty"><div class="icon">🔒</div><p>로그인 후 저장된 레시피를 확인할 수 있습니다.</p></div>';
+    } else {
+      loadRecipes();
+    }
+  });
+
+  async function loadRecipes(offset = 0) {
+    currentOffset = offset;
+    document.getElementById('list-area').innerHTML =
+      '<div class="loading"><div class="spinner"></div>불러오는 중…</div>';
+    try {
+      const resp = await Auth.authFetch(
+        `/api/saved-recipes?limit=${PAGE_SIZE}&offset=${offset}`
+      );
+      if (resp.status === 401) { Auth.clearSession(); openLoginModal(() => loadRecipes()); return; }
+      const data = await resp.json();
+      allRecipes = data.recipes || [];
+      totalCount = data.total ?? allRecipes.length;
+      renderList();
+    } catch {
+      document.getElementById('list-area').innerHTML =
+        '<div class="empty"><div class="icon">⚠️</div><p>레시피를 불러오지 못했어요. 잠시 후 새로고침 해주세요.</p></div>';
+    }
+  }
+
+  // ── 검색 + 정렬 ────────────────────────────────────────────────────────────
+  document.getElementById('search-input').addEventListener('input', renderList);
+  document.getElementById('sort-select').addEventListener('change', renderList);
+
+  function renderList() {
+    const q    = document.getElementById('search-input').value.toLowerCase().trim();
+    const sort = document.getElementById('sort-select').value;
+
+    let filtered = allRecipes.filter(r => {
+      const d = r.recipe_data;
+      const inTitle = (d.title || '').toLowerCase().includes(q);
+      const inTags  = (d.tags || []).some(t => t.toLowerCase().includes(q));
+      return !q || inTitle || inTags;
+    });
+
+    if (sort === 'rating') {
+      filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    }
+
+    const area = document.getElementById('list-area');
+    if (filtered.length === 0) {
+      area.innerHTML = `
+        <div class="empty">
+          <div class="icon">🍽️</div>
+          <p>${q ? '검색 결과가 없어요. 다른 키워드로 찾아보세요.' : '아직 저장된 레시피가 없어요. 첫 레시피를 만들어 볼까요?'}</p>
+          ${!q ? '<a href="/">재료 인식하러 가기</a>' : ''}
+        </div>`;
+      return;
+    }
+
+    area.innerHTML = '';
+
+    // 전체 개수 + 페이지 정보 표시 (검색 중이 아닐 때만 페이지네이션 의미 있음)
+    if (!q) {
+      const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+      const currentPage = Math.floor(currentOffset / PAGE_SIZE) + 1;
+      const infoBar = document.createElement('div');
+      infoBar.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:0.85rem;color:#6b7280;';
+      infoBar.innerHTML = `<span>전체 <strong style="color:#1a1a2e;">${totalCount}</strong>개의 레시피</span>` +
+        (totalPages > 1 ? `<span>${currentPage} / ${totalPages} 페이지</span>` : '');
+      area.appendChild(infoBar);
+    }
+
+    const list = document.createElement('div');
+    list.className = 'recipe-list';
+    filtered.forEach(r => list.appendChild(makeCard(r)));
+    area.appendChild(list);
+
+    // 페이지네이션 버튼 (검색 중이 아닐 때만)
+    if (!q && totalCount > PAGE_SIZE) {
+      const nav = document.createElement('div');
+      nav.style.cssText = 'display:flex;gap:10px;justify-content:center;margin-top:20px;';
+      if (currentOffset > 0) {
+        const prevBtn = document.createElement('button');
+        prevBtn.textContent = '← 이전';
+        prevBtn.style.cssText = 'padding:10px 20px;background:#fff;border:1.5px solid #d1d9f0;border-radius:10px;font-size:0.88rem;font-weight:600;color:#4f7df3;cursor:pointer;';
+        prevBtn.addEventListener('click', () => loadRecipes(currentOffset - PAGE_SIZE));
+        nav.appendChild(prevBtn);
+      }
+      if (currentOffset + PAGE_SIZE < totalCount) {
+        const nextBtn = document.createElement('button');
+        nextBtn.textContent = '다음 →';
+        nextBtn.style.cssText = 'padding:10px 20px;background:#4f7df3;border:none;border-radius:10px;font-size:0.88rem;font-weight:600;color:#fff;cursor:pointer;';
+        nextBtn.addEventListener('click', () => loadRecipes(currentOffset + PAGE_SIZE));
+        nav.appendChild(nextBtn);
+      }
+      if (nav.childElementCount > 0) area.appendChild(nav);
+    }
+  }
+
+  function makeCard(r) {
+    const d    = r.recipe_data;
+    const date = r.saved_at ? new Date(r.saved_at).toLocaleDateString('ko-KR') : '';
+    const stars = [1,2,3,4,5].map(n =>
+      `<span class="star ${n <= (r.rating||0) ? 'on' : ''}" data-val="${n}" data-id="${esc(r.id)}">★</span>`
+    ).join('');
+
+    const el = document.createElement('div');
+    el.className = 'recipe-card';
+    el.innerHTML = `
+      <div class="card-top">
+        <div class="card-title">${esc(d.title) || '(제목 없음)'}</div>
+        <button class="del-btn" title="삭제">✕</button>
+      </div>
+      <p class="card-desc">${esc(d.description)}</p>
+      <div class="meta-row">
+        <span class="meta-badge">⏱ ${esc(d.cooking_time)}분</span>
+        <span class="meta-badge">📊 ${esc(d.difficulty)}</span>
+        <span class="meta-badge">👥 ${esc(d.servings)}인분</span>
+      </div>
+      <div class="stars">${stars}</div>
+      <div class="tags">${(d.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+      ${r.memo ? `<p class="memo-preview">📝 ${esc(r.memo.slice(0,60))}${r.memo.length>60?'…':''}</p>` : ''}
+      <p class="saved-date">저장일: ${esc(date)}</p>
+    `;
+
+    // 별점 클릭 (카드)
+    el.querySelectorAll('.star').forEach(s => {
+      s.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const val = parseInt(s.dataset.val);
+        const id  = s.dataset.id;
+        const rec = allRecipes.find(x => String(x.id) === String(id));
+        const prevRating = rec ? (rec.rating || 0) : 0;
+        // Optimistic update
+        if (rec) rec.rating = val;
+        renderList();
+        // Persist — revert if it fails
+        const ok = await patchRecipe(id, { rating: val });
+        if (!ok) {
+          if (rec) rec.rating = prevRating;
+          renderList();
+        }
+      });
+    });
+
+    // 삭제 버튼
+    el.querySelector('.del-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm(`"${d.title}" 레시피를 삭제할까요?`)) return;
+      await deleteRecipe(r.id);
+    });
+
+    // 카드 클릭 → 모달
+    el.addEventListener('click', () => openModal(r));
+
+    return el;
+  }
+
+  // ── 모달 ───────────────────────────────────────────────────────────────────
+  const overlay = document.getElementById('modal-overlay');
+
+  function openModal(r) {
+    currentSaved = r;
+    const d = r.recipe_data;
+
+    document.getElementById('m-title').textContent = d.title || '';
+    document.getElementById('m-desc').textContent  = d.description || '';
+    document.getElementById('m-meta').innerHTML = `
+      <span class="meta-badge">⏱ ${esc(d.cooking_time)}분</span>
+      <span class="meta-badge">📊 ${esc(d.difficulty)}</span>
+      <span class="meta-badge">👥 ${esc(d.servings)}인분</span>
+    `;
+    document.getElementById('m-ings').innerHTML =
+      (d.ingredients||[]).map(i=>
+        `<span class="ing-chip ${i.available?'have':'need'}">${esc(i.name)} ${esc(i.amount)}</span>`
+      ).join('');
+
+    const stepEl = document.getElementById('m-steps');
+    stepEl.innerHTML = (d.steps||[]).map((s,i) => `
+      <div class="step-item" data-i="${i}">
+        <div class="step-num">${i+1}</div>
+        <div class="step-text">${esc(s)}</div>
+      </div>`).join('');
+    stepEl.querySelectorAll('.step-item').forEach(el =>
+      el.addEventListener('click', () => el.classList.toggle('done'))
+    );
+
+    // 별점
+    renderModalStars(r.rating || 0);
+
+    // 메모
+    const memoEl = document.getElementById('modal-memo');
+    memoEl.value = r.memo || '';
+    document.getElementById('memo-count').textContent = memoEl.value.length;
+
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function renderModalStars(current) {
+    const stars = document.getElementById('m-stars');
+    stars.innerHTML = [1,2,3,4,5].map(n =>
+      `<span class="star ${n<=current?'on':''}" data-val="${n}">★</span>`
+    ).join('');
+    document.getElementById('m-rating-label').textContent = current ? `${current}점` : '미평가';
+
+    stars.querySelectorAll('.star').forEach(s => {
+      s.addEventListener('mouseover', () => {
+        stars.querySelectorAll('.star').forEach((x,i) => x.classList.toggle('on', i+1 <= parseInt(s.dataset.val)));
+      });
+      s.addEventListener('mouseleave', () => {
+        const cur = currentSaved?.rating || 0;
+        stars.querySelectorAll('.star').forEach((x,i) => x.classList.toggle('on', i+1 <= cur));
+      });
+      s.addEventListener('click', async () => {
+        const val = parseInt(s.dataset.val);
+        if (currentSaved) {
+          const prevRating = currentSaved.rating || 0;
+          // Optimistic update
+          currentSaved.rating = val;
+          const rec = allRecipes.find(x => x.id === currentSaved.id);
+          if (rec) rec.rating = val;
+          renderModalStars(val);
+          renderList();
+          // Persist — revert if it fails
+          const ok = await patchRecipe(currentSaved.id, { rating: val });
+          if (!ok) {
+            currentSaved.rating = prevRating;
+            if (rec) rec.rating = prevRating;
+            renderModalStars(prevRating);
+            renderList();
+          }
+        }
+      });
+    });
+  }
+
+  function closeModal() {
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+    currentSaved = null;
+  }
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+
+  // 메모 글자 수
+  document.getElementById('modal-memo').addEventListener('input', (e) => {
+    document.getElementById('memo-count').textContent = e.target.value.length;
+  });
+
+  // 메모 저장
+  document.getElementById('btn-save-memo').addEventListener('click', async () => {
+    if (!currentSaved) return;
+    const memo = document.getElementById('modal-memo').value;
+    if (memo.length > 500) {
+      showModalError('메모는 500자 이내로 작성해 주세요.');
+      return;
+    }
+    const saveBtn = document.getElementById('btn-save-memo');
+    const prevMemo = currentSaved.memo || '';
+    saveBtn.disabled = true;
+    saveBtn.textContent = '저장 중…';
+    const ok = await patchRecipe(currentSaved.id, { memo });
+    if (ok) {
+      currentSaved.memo = memo;
+      const rec = allRecipes.find(x => x.id === currentSaved.id);
+      if (rec) rec.memo = memo;
+      renderList();
+      saveBtn.textContent = '✓ 저장됨';
+      setTimeout(() => { saveBtn.textContent = '변경사항 저장'; saveBtn.disabled = false; }, 1800);
+    } else {
+      saveBtn.textContent = '변경사항 저장';
+      saveBtn.disabled = false;
+    }
+  });
+
+  // 삭제 (모달)
+  document.getElementById('btn-del-recipe').addEventListener('click', async () => {
+    if (!currentSaved) return;
+    const title = currentSaved.recipe_data?.title || '이 레시피';
+    if (!confirm(`"${title}"를 삭제할까요?`)) return;
+    await deleteRecipe(currentSaved.id);
+    closeModal();
+  });
+
+  // ── 모달 내 인라인 에러 표시 ────────────────────────────────────────────────
+  function showModalError(msg) {
+    let errEl = document.getElementById('_modal-err');
+    if (!errEl) {
+      errEl = document.createElement('p');
+      errEl.id = '_modal-err';
+      errEl.style.cssText = 'color:#b91c1c;font-size:0.85rem;margin-top:8px;';
+      document.querySelector('.modal-actions').before(errEl);
+    }
+    errEl.textContent = '⚠️ ' + msg;
+    clearTimeout(errEl._timer);
+    errEl._timer = setTimeout(() => { errEl.textContent = ''; }, 4000);
+  }
+
+  // ── API 헬퍼 ───────────────────────────────────────────────────────────────
+  // Returns true on success, false on any error (also shows user-facing feedback).
+  async function patchRecipe(id, body) {
+    try {
+      const resp = await Auth.authFetch(`/api/saved-recipes/${id}`, {
+        method: 'PATCH', body: JSON.stringify(body)
+      });
+      if (resp.ok) return true;
+      if (resp.status === 401) {
+        Auth.clearSession();
+        openLoginModal();
+        return false;
+      }
+      let detail = '저장에 실패했어요. 잠시 후 다시 시도해 주세요.';
+      try { const d = await resp.json(); detail = d.detail || detail; } catch {}
+      showModalError(detail);
+      return false;
+    } catch {
+      showModalError('네트워크 오류가 발생했어요. 인터넷 연결을 확인해 주세요.');
+      return false;
+    }
+  }
+
+  async function deleteRecipe(id) {
+    try {
+      await Auth.authFetch(`/api/saved-recipes/${id}`, { method: 'DELETE' });
+    } catch {
+      showModalError('삭제 중 오류가 발생했어요. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+    allRecipes = allRecipes.filter(r => r.id !== id);
+    renderList();
+  }
+</script>
+</body>
+</html>
