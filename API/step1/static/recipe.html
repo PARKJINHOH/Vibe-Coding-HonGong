@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>레시피 추천</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0f4f8;
+    min-height: 100vh;
+    padding: 80px 16px 40px;
+  }
+
+  .page { max-width: 760px; margin: 0 auto; }
+
+  /* ── 헤더 ── */
+  .top-nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .back-btn {
+    background: #fff;
+    border: 1.5px solid #d1d9f0;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 0.88rem;
+    cursor: pointer;
+    color: #4f7df3;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .back-btn:hover { background: #eef3ff; }
+  h1 { font-size: 1.5rem; font-weight: 700; color: #1a1a2e; }
+
+  /* ── 카드 공통 ── */
+  .card {
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+  .card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 14px;
+  }
+
+  /* ── 재료 태그 (읽기 전용) ── */
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tag {
+    background: #eef3ff;
+    color: #2d4fa3;
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+  .no-ingredients {
+    color: #9ca3af;
+    font-size: 0.9rem;
+  }
+
+  /* ── 필터 ── */
+  .filters {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 0;
+  }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 130px; }
+  .filter-group label { font-size: 0.8rem; color: #6b7280; font-weight: 600; }
+  .filter-group select {
+    padding: 9px 12px;
+    border: 1.5px solid #d1d9f0;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    background: #f8faff;
+    outline: none;
+    cursor: pointer;
+    color: #1a1a2e;
+    transition: border-color 0.2s;
+  }
+  .filter-group select:focus { border-color: #4f7df3; }
+
+  /* ── 생성 버튼 ── */
+  #generate-btn {
+    display: block;
+    width: 100%;
+    margin-top: 20px;
+    padding: 14px;
+    background: #4f7df3;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+  }
+  #generate-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+  #generate-btn:not(:disabled):hover { background: #3a68e0; }
+
+  /* ── 로딩 ── */
+  #loading {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    margin-top: 20px;
+    padding: 16px;
+    background: #f0f4ff;
+    border-radius: 10px;
+    color: #4f7df3;
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+  .spinner {
+    width: 22px; height: 22px;
+    border: 3px solid #c3d0f8;
+    border-top-color: #4f7df3;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── 오류 ── */
+  #error-box {
+    display: none;
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: #fff0f0;
+    border: 1px solid #fca5a5;
+    border-radius: 10px;
+    color: #b91c1c;
+    font-size: 0.9rem;
+  }
+
+  /* ── 결과 헤더 ── */
+  #result-header {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    margin-top: 8px;
+  }
+  #result-header h2 { font-size: 1.1rem; font-weight: 700; color: #1a1a2e; }
+  #regen-btn {
+    background: #fff;
+    border: 1.5px solid #d1d9f0;
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-size: 0.88rem;
+    color: #4f7df3;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #regen-btn:hover { background: #eef3ff; }
+
+  /* ── 레시피 카드 ── */
+  #recipe-list { display: flex; flex-direction: column; gap: 20px; }
+
+  .recipe-card {
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    padding: 24px;
+    cursor: pointer;
+    transition: box-shadow 0.2s, transform 0.15s;
+    border: 2px solid transparent;
+  }
+  .recipe-card:hover {
+    box-shadow: 0 6px 28px rgba(79,125,243,0.15);
+    border-color: #c3d0f8;
+    transform: translateY(-2px);
+  }
+
+  .recipe-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .recipe-title { font-size: 1.1rem; font-weight: 700; color: #1a1a2e; }
+  .recipe-desc { font-size: 0.88rem; color: #6b7280; margin-bottom: 14px; line-height: 1.5; }
+
+  .meta-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .meta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #f3f4f6;
+    color: #374151;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  /* 재료 목록 */
+  .ing-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+  .ing-chip {
+    border-radius: 14px;
+    padding: 3px 10px;
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+  .ing-chip.have { background: #d1fae5; color: #065f46; }
+  .ing-chip.need { background: #f3f4f6; color: #9ca3af; }
+
+  .card-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+  .detail-btn {
+    padding: 9px 18px;
+    background: #4f7df3;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .detail-btn:hover { background: #3a68e0; }
+  .save-btn {
+    padding: 9px 18px;
+    background: #fff;
+    color: #4f7df3;
+    border: 1.5px solid #c3d0f8;
+    border-radius: 10px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .save-btn:hover { background: #eef3ff; }
+  .save-btn.saved {
+    background: #d1fae5;
+    color: #065f46;
+    border-color: #6ee7b7;
+    cursor: default;
+  }
+
+  /* ── 모달 ── */
+  #modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 100;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 16px;
+    overflow-y: auto;
+  }
+  #modal-overlay.open { display: flex; }
+
+  #modal {
+    background: #fff;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 600px;
+    padding: 32px;
+    position: relative;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+  }
+  #modal-close {
+    position: absolute;
+    top: 16px; right: 20px;
+    background: none;
+    border: none;
+    font-size: 1.4rem;
+    cursor: pointer;
+    color: #9ca3af;
+    line-height: 1;
+  }
+  #modal-close:hover { color: #374151; }
+
+  #modal h2 { font-size: 1.25rem; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+  #modal .modal-desc { color: #6b7280; font-size: 0.9rem; margin-bottom: 16px; }
+  #modal .meta-row { margin-bottom: 20px; }
+
+  .modal-section-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+  }
+  .modal-ing-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 24px;
+  }
+
+  /* 단계별 체크리스트 */
+  .step-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
+  .step-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .step-check {
+    width: 26px; height: 26px;
+    border: 2px solid #c3d0f8;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    color: #4f7df3;
+    font-weight: 700;
+    transition: background 0.2s, border-color 0.2s;
+    margin-top: 1px;
+  }
+  .step-item.done .step-check {
+    background: #4f7df3;
+    border-color: #4f7df3;
+    color: #fff;
+  }
+  .step-text {
+    font-size: 0.92rem;
+    color: #374151;
+    line-height: 1.6;
+    transition: color 0.2s;
+  }
+  .step-item.done .step-text { color: #9ca3af; text-decoration: line-through; }
+
+  .modal-save-btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #4f7df3, #7c5cf6);
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .modal-save-btn:hover { opacity: 0.9; }
+  .modal-save-btn.saved {
+    background: linear-gradient(135deg, #10b981, #059669);
+    cursor: default;
+  }
+
+  /* ── 로그인 유도 모달 ── */
+  #login-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  #login-modal-overlay.open { display: flex; }
+  #login-modal {
+    background: #fff;
+    border-radius: 20px;
+    padding: 32px;
+    max-width: 360px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+  }
+  #login-modal h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; color: #1a1a2e; }
+  #login-modal p { color: #6b7280; font-size: 0.9rem; margin-bottom: 24px; line-height: 1.5; }
+  .login-modal-btns { display: flex; gap: 10px; justify-content: center; }
+  .login-modal-btns button {
+    padding: 10px 22px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary { background: #4f7df3; color: #fff; border: none; }
+  .btn-secondary { background: #fff; color: #6b7280; border: 1.5px solid #d1d9f0; }
+  .btn-primary:hover { background: #3a68e0; }
+  .btn-secondary:hover { background: #f3f4f6; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- 상단 네비 -->
+  <div class="top-nav">
+    <a href="/" class="back-btn">← 재료 인식</a>
+    <h1>🍳 레시피 추천</h1>
+  </div>
+
+  <!-- 인식된 재료 -->
+  <div class="card">
+    <div class="card-title">🥕 인식된 재료</div>
+    <div class="tags" id="ingredient-tags">
+      <span class="no-ingredients">재료를 불러오는 중…</span>
+    </div>
+  </div>
+
+  <!-- 필터 + 생성 버튼 -->
+  <div class="card">
+    <div class="card-title">⚙️ 레시피 조건</div>
+    <div class="filters">
+      <div class="filter-group">
+        <label>조리 시간</label>
+        <select id="filter-time">
+          <option value="15">15분 이내</option>
+          <option value="30" selected>30분 이내</option>
+          <option value="999">제한 없음</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>난이도</label>
+        <select id="filter-difficulty">
+          <option value="쉬움">쉬움</option>
+          <option value="보통" selected>보통</option>
+          <option value="어려움">어려움</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>인원수</label>
+        <select id="filter-servings">
+          <option value="1">1인</option>
+          <option value="2" selected>2인</option>
+          <option value="4">4인</option>
+        </select>
+      </div>
+    </div>
+    <button id="generate-btn">레시피 생성하기</button>
+    <div id="loading">
+      <div class="spinner"></div>
+      <span>AI가 레시피를 생성하고 있습니다…</span>
+    </div>
+    <div id="error-box"></div>
+  </div>
+
+  <!-- 결과 헤더 -->
+  <div id="result-header">
+    <h2>추천 레시피</h2>
+    <button id="regen-btn">↻ 다시 생성</button>
+  </div>
+
+  <!-- 레시피 카드 목록 -->
+  <div id="recipe-list"></div>
+
+</div>
+
+<!-- 상세 모달 -->
+<div id="modal-overlay">
+  <div id="modal">
+    <button id="modal-close">✕</button>
+    <h2 id="modal-title"></h2>
+    <p class="modal-desc" id="modal-desc"></p>
+    <div class="meta-row" id="modal-meta"></div>
+    <div class="modal-section-title">재료</div>
+    <div class="modal-ing-list" id="modal-ingredients"></div>
+    <div class="modal-section-title">조리 순서</div>
+    <div class="step-list" id="modal-steps"></div>
+    <button class="modal-save-btn" id="modal-save-btn">저장하기</button>
+  </div>
+</div>
+
+<!-- 로그인 모달은 header.js가 제공 -->
+
+<script>
+  // ── 재료 로드 ──────────────────────────────────────────────────────────────
+  let ingredients = [];
+  try {
+    ingredients = JSON.parse(sessionStorage.getItem('ingredients') || '[]');
+  } catch (_) {}
+
+  const tagsEl = document.getElementById('ingredient-tags');
+  if (ingredients.length > 0) {
+    tagsEl.innerHTML = ingredients.map(i => `<span class="tag">${i}</span>`).join('');
+  } else {
+    tagsEl.innerHTML = '<span class="no-ingredients">재료 정보가 없습니다. <a href="/">← 재료 인식</a>으로 돌아가세요.</span>';
+  }
+
+  // ── 상태 ──────────────────────────────────────────────────────────────────
+  let recipes = [];
+  let currentRecipe = null;
+  let savedIds = new Set();
+
+  const generateBtn = document.getElementById('generate-btn');
+  const loadingEl   = document.getElementById('loading');
+  const errorBox    = document.getElementById('error-box');
+  const resultHeader = document.getElementById('result-header');
+  const recipeList  = document.getElementById('recipe-list');
+
+  // ── 레시피 생성 ────────────────────────────────────────────────────────────
+  async function generateRecipes() {
+    if (ingredients.length === 0) return;
+
+    setLoading(true);
+    hideError();
+    resultHeader.style.display = 'none';
+    recipeList.innerHTML = '';
+
+    const body = {
+      ingredients,
+      filters: {
+        cooking_time: parseInt(document.getElementById('filter-time').value),
+        difficulty:   document.getElementById('filter-difficulty').value,
+        servings:     parseInt(document.getElementById('filter-servings').value),
+      }
+    };
+
+    try {
+      const hdrs = { 'Content-Type': 'application/json' };
+      const tok = (typeof Auth !== 'undefined') ? Auth.getToken() : localStorage.getItem('auth_token');
+      if (tok) hdrs['Authorization'] = `Bearer ${tok}`;
+      const resp = await fetch('/api/recipe', {
+        method: 'POST',
+        headers: hdrs,
+        body: JSON.stringify(body)
+      });
+      const data = await resp.json();
+
+      if (resp.ok && data.success && data.recipes.length > 0) {
+        recipes = data.recipes;
+        renderRecipes();
+        resultHeader.style.display = 'flex';
+      } else if (resp.status === 429 || (data.detail || '').includes('혼잡')) {
+        showError('현재 AI 서버가 혼잡합니다. 잠시 후 다시 시도해주세요.');
+      } else {
+        showError(data.detail || data.error || '레시피 생성에 실패했습니다.');
+      }
+    } catch (e) {
+      showError('네트워크 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  generateBtn.addEventListener('click', generateRecipes);
+  document.getElementById('regen-btn').addEventListener('click', generateRecipes);
+
+  // ── 레시피 카드 렌더링 ─────────────────────────────────────────────────────
+  function renderRecipes() {
+    recipeList.innerHTML = '';
+    recipes.forEach((r, idx) => {
+      const card = document.createElement('div');
+      card.className = 'recipe-card';
+      card.innerHTML = `
+        <div class="recipe-card-header">
+          <div class="recipe-title">${idx + 1}. ${r.title}</div>
+        </div>
+        <p class="recipe-desc">${r.description}</p>
+        <div class="meta-row">
+          <span class="meta-badge">⏱ ${r.cooking_time}분</span>
+          <span class="meta-badge">📊 ${r.difficulty}</span>
+          <span class="meta-badge">👥 ${r.servings}인분</span>
+        </div>
+        <div class="ing-list">
+          ${(r.ingredients || []).map(i =>
+            `<span class="ing-chip ${i.available ? 'have' : 'need'}">${i.name} ${i.amount}</span>`
+          ).join('')}
+        </div>
+        <div class="card-actions">
+          <button class="save-btn ${savedIds.has(r.id) ? 'saved' : ''}" data-id="${r.id}">
+            ${savedIds.has(r.id) ? '✓ 저장됨' : '저장하기'}
+          </button>
+          <button class="detail-btn" data-id="${r.id}">상세 보기</button>
+        </div>
+      `;
+
+      card.querySelector('.detail-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        openModal(r);
+      });
+      card.querySelector('.save-btn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleSave(r, e.currentTarget);
+      });
+      card.addEventListener('click', () => openModal(r));
+      recipeList.appendChild(card);
+    });
+  }
+
+  // ── 상세 모달 ──────────────────────────────────────────────────────────────
+  const modalOverlay = document.getElementById('modal-overlay');
+  const modalSaveBtn = document.getElementById('modal-save-btn');
+
+  function openModal(r) {
+    currentRecipe = r;
+    document.getElementById('modal-title').textContent = r.title;
+    document.getElementById('modal-desc').textContent  = r.description;
+    document.getElementById('modal-meta').innerHTML = `
+      <span class="meta-badge">⏱ ${r.cooking_time}분</span>
+      <span class="meta-badge">📊 ${r.difficulty}</span>
+      <span class="meta-badge">👥 ${r.servings}인분</span>
+    `;
+    document.getElementById('modal-ingredients').innerHTML =
+      (r.ingredients || []).map(i =>
+        `<span class="ing-chip ${i.available ? 'have' : 'need'}">${i.name} ${i.amount}</span>`
+      ).join('');
+
+    const stepList = document.getElementById('modal-steps');
+    stepList.innerHTML = (r.steps || []).map((s, i) => `
+      <div class="step-item" data-step="${i}">
+        <div class="step-check">${i + 1}</div>
+        <div class="step-text">${s}</div>
+      </div>
+    `).join('');
+    stepList.querySelectorAll('.step-item').forEach(el => {
+      el.addEventListener('click', () => el.classList.toggle('done'));
+    });
+
+    const saved = savedIds.has(r.id);
+    modalSaveBtn.textContent = saved ? '✓ 저장됨' : '저장하기';
+    modalSaveBtn.className = 'modal-save-btn' + (saved ? ' saved' : '');
+
+    modalOverlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal() {
+    modalOverlay.classList.remove('open');
+    document.body.style.overflow = '';
+    currentRecipe = null;
+  }
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
+
+  modalSaveBtn.addEventListener('click', () => {
+    if (currentRecipe) handleSave(currentRecipe, modalSaveBtn);
+  });
+
+  // ── 저장 처리 ──────────────────────────────────────────────────────────────
+  async function handleSave(recipe, btn) {
+    const token = (typeof Auth !== 'undefined') ? Auth.getToken() : localStorage.getItem('auth_token');
+    if (!token) {
+      if (typeof openLoginModal !== 'undefined') openLoginModal(() => handleSave(recipe, btn));
+      return;
+    }
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = '저장 중…';
+    try {
+      const resp = await fetch('/api/saved-recipes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ recipe_data: recipe }),
+      });
+      if (resp.ok) {
+        savedIds.add(recipe.id);
+        const mark = (b) => { b.textContent = '✓ 저장됨'; b.classList.add('saved'); };
+        mark(btn);
+        document.querySelectorAll(`.save-btn[data-id="${recipe.id}"]`).forEach(mark);
+        if (modalSaveBtn && currentRecipe?.id === recipe.id) mark(modalSaveBtn);
+      } else {
+        const d = await resp.json();
+        btn.disabled = false; btn.textContent = orig;
+        if (resp.status === 401) {
+          if (typeof Auth !== 'undefined') Auth.clearSession();
+          if (typeof openLoginModal !== 'undefined') openLoginModal(() => handleSave(recipe, btn));
+        } else { alert(d.detail || '저장에 실패했습니다.'); }
+      }
+    } catch { btn.disabled = false; btn.textContent = orig; alert('네트워크 오류가 발생했습니다.'); }
+  }
+
+  // 로그인 유도 → header.js의 openLoginModal 위임 (Step 3 연동 완료)
+
+  // ── 유틸 ──────────────────────────────────────────────────────────────────
+  function setLoading(on) {
+    loadingEl.style.display = on ? 'flex' : 'none';
+    generateBtn.disabled = on;
+  }
+  function showError(msg) {
+    errorBox.textContent = '⚠️ ' + msg;
+    errorBox.style.display = 'block';
+  }
+  function hideError() { errorBox.style.display = 'none'; }
+</script>
+<script src="/header.js"></script>
+</body>
+</html>
